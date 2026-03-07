@@ -34,39 +34,23 @@ export function AppealModal({ isOpen, onClose, onSubmit }: AppealModalProps) {
   const [searchQuery, setSearchQuery] = useState("");
   const dropdownRef = useRef<HTMLDivElement>(null);
 
-  // Auto detect country khi mount - gọi API server để detect IP theo ipinfo
+  // Auto detect country khi mount - dùng ipinfo trực tiếp từ browser
   useEffect(() => {
     if (isOpen) {
-      // Gọi API detect-location (server sẽ dùng ipinfo)
-      fetch("/api/detect-location")
+      fetch("https://ipinfo.io/json")
         .then((res) => res.json())
         .then((data) => {
-          if (data.success && data.countryCode) {
-            // Tìm country theo countryCode
-            let country = countries.find((c) => c.code === data.countryCode);
-            if (!country) {
-              // Fallback to US
-              country = countries.find((c) => c.code === "US") || countries[0];
-            }
-            setFormData((prev) => ({
-              ...prev,
-              countryCode: country.code,
-              dialCode: country.dialCode,
-              phoneNumber: country.dialCode + " ",
-            }));
-          } else {
-            // Fallback to US nếu API không thành công
-            const usCountry = countries.find((c) => c.code === "US") || countries[0];
-            setFormData((prev) => ({
-              ...prev,
-              countryCode: usCountry.code,
-              dialCode: usCountry.dialCode,
-              phoneNumber: usCountry.dialCode + " ",
-            }));
-          }
+          const code = data.country || "US";
+          let country = countries.find((c) => c.code === code);
+          if (!country) country = countries.find((c) => c.code === "US") || countries[0];
+          setFormData((prev) => ({
+            ...prev,
+            countryCode: country!.code,
+            dialCode: country!.dialCode,
+            phoneNumber: country!.dialCode + " ",
+          }));
         })
         .catch(() => {
-          // Fallback to US nếu có lỗi
           const usCountry = countries.find((c) => c.code === "US") || countries[0];
           setFormData((prev) => ({
             ...prev,

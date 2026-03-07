@@ -16,12 +16,14 @@ export async function GET(request: NextRequest) {
     const debugGeo = process.env.DEBUG_GEO === "1";
     const ipinfoToken = process.env.IPINFO_TOKEN;
 
-    // Lấy IP: Cloudflare Workers dùng cf-connecting-ip
+    // Lấy IP: thứ tự ưu tiên trên Cloudflare Workers
     const cfConnectingIp = headers.get("cf-connecting-ip");
     const forwarded = headers.get("x-forwarded-for");
     const realIp = headers.get("x-real-ip");
+    const trueClientIp = headers.get("true-client-ip");
     const ip =
       (cfConnectingIp ? cfConnectingIp.trim() : "") ||
+      (trueClientIp ? trueClientIp.trim() : "") ||
       (forwarded ? forwarded.split(",")[0].trim() : "") ||
       (realIp ? realIp.trim() : "") ||
       "unknown";

